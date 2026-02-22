@@ -1,375 +1,68 @@
 ---
 name: pdf
-description: Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.
-license: Proprietary. LICENSE.txt has complete terms
+description: Use this skill for PDF tasks including reading/extracting content, form filling, merging/splitting, OCR, and especially creating polished multi-page PDFs through an HTML-first workflow (build styled paged HTML, validate in browser, then convert HTML to PDF).
 ---
 
-# PDF Processing Guide
+# PDF Skill (HTML-first)
 
-## Overview
+## Core rule for PDF generation
 
-This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.
+When a user asks for a **beautiful / premium / presentation-grade / visually polished** PDF:
 
-## Quick Start
+1. Build a paged HTML document first (`@page`, `page-break-*`, CSS grid/flex, reusable components).
+2. Ensure multi-page layout looks correct in browser print preview.
+3. Convert that HTML to PDF with a browser engine (Playwright/Chromium preferred).
+4. Keep the HTML artifact so it can be edited in later iterations.
 
-```python
-from pypdf import PdfReader, PdfWriter
+Do **not** start with plain ReportLab text flow unless the user explicitly wants a minimal/basic PDF.
 
-# Read a PDF
-reader = PdfReader("document.pdf")
-print(f"Pages: {len(reader.pages)}")
+## Recommended implementation workflow
 
-# Extract text
-text = ""
-for page in reader.pages:
-    text += page.extract_text()
-```
+1. **Structure content**: title page / sections / appendix and define per-page blocks.
+2. **Define design tokens** in CSS (`:root` colors, spacing, typography scale, card radius).
+3. **Use print-safe CSS**:
+   - `@page { size: A4; margin: ... }`
+   - `print-color-adjust: exact`
+   - avoid element splits via `break-inside: avoid` for cards/tables/charts.
+4. **Render HTML** from template data (Jinja/string template are both fine).
+5. **Export PDF** with headless Chromium.
+6. **Validate output**: page count, overflow/cutoff, alignment, and readability.
 
-## Python Libraries
+## Default tooling choices
 
-### pypdf - Basic Operations
+- **Creation / edits / merge / split / metadata**: `pypdf`
+- **Table/text extraction**: `pdfplumber`
+- **Scanned OCR fallback**: `pytesseract` + `pdf2image`
+- **HTML to PDF rendering**: Playwright Chromium (`page.pdf(print_background=True)`)
 
-#### Merge PDFs
-```python
-from pypdf import PdfWriter, PdfReader
+## Bundled script for premium output
 
-writer = PdfWriter()
-for pdf_file in ["doc1.pdf", "doc2.pdf", "doc3.pdf"]:
-    reader = PdfReader(pdf_file)
-    for page in reader.pages:
-        writer.add_page(page)
+Use `scripts/create_premium_pdf.py` as the starter pipeline:
 
-with open("merged.pdf", "wb") as output:
-    writer.write(output)
-```
+- Generates a styled, multi-page HTML report.
+- Converts HTML → PDF via Playwright unless `--html-only` is set.
+- Supports `--company`, `--month`, and output paths.
 
-#### Split PDF
-```python
-reader = PdfReader("input.pdf")
-for i, page in enumerate(reader.pages):
-    writer = PdfWriter()
-    writer.add_page(page)
-    with open(f"page_{i+1}.pdf", "wb") as output:
-        writer.write(output)
-```
-
-#### Extract Metadata
-```python
-reader = PdfReader("document.pdf")
-meta = reader.metadata
-print(f"Title: {meta.title}")
-print(f"Author: {meta.author}")
-print(f"Subject: {meta.subject}")
-print(f"Creator: {meta.creator}")
-```
-
-#### Rotate Pages
-```python
-reader = PdfReader("input.pdf")
-writer = PdfWriter()
-
-page = reader.pages[0]
-page.rotate(90)  # Rotate 90 degrees clockwise
-writer.add_page(page)
-
-with open("rotated.pdf", "wb") as output:
-    writer.write(output)
-```
-
-### pdfplumber - Text and Table Extraction
-
-#### Extract Text with Layout
-```python
-import pdfplumber
-
-with pdfplumber.open("document.pdf") as pdf:
-    for page in pdf.pages:
-        text = page.extract_text()
-        print(text)
-```
-
-#### Extract Tables
-```python
-with pdfplumber.open("document.pdf") as pdf:
-    for i, page in enumerate(pdf.pages):
-        tables = page.extract_tables()
-        for j, table in enumerate(tables):
-            print(f"Table {j+1} on page {i+1}:")
-            for row in table:
-                print(row)
-```
-
-#### Advanced Table Extraction
-```python
-import pandas as pd
-
-with pdfplumber.open("document.pdf") as pdf:
-    all_tables = []
-    for page in pdf.pages:
-        tables = page.extract_tables()
-        for table in tables:
-            if table:  # Check if table is not empty
-                df = pd.DataFrame(table[1:], columns=table[0])
-                all_tables.append(df)
-
-# Combine all tables
-if all_tables:
-    combined_df = pd.concat(all_tables, ignore_index=True)
-    combined_df.to_excel("extracted_tables.xlsx", index=False)
-```
-
-### reportlab - Create PDFs
-
-#### Basic PDF Creation
-```python
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
-c = canvas.Canvas("hello.pdf", pagesize=letter)
-width, height = letter
-
-# Add text
-c.drawString(100, height - 100, "Hello World!")
-c.drawString(100, height - 120, "This is a PDF created with reportlab")
-
-# Add a line
-c.line(100, height - 140, 400, height - 140)
-
-# Save
-c.save()
-```
-
-#### Create PDF with Multiple Pages
-```python
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet
-
-doc = SimpleDocTemplate("report.pdf", pagesize=letter)
-styles = getSampleStyleSheet()
-story = []
-
-# Add content
-title = Paragraph("Report Title", styles['Title'])
-story.append(title)
-story.append(Spacer(1, 12))
-
-body = Paragraph("This is the body of the report. " * 20, styles['Normal'])
-story.append(body)
-story.append(PageBreak())
-
-# Page 2
-story.append(Paragraph("Page 2", styles['Heading1']))
-story.append(Paragraph("Content for page 2", styles['Normal']))
-
-# Build PDF
-doc.build(story)
-```
-
-#### Subscripts and Superscripts
-
-**IMPORTANT**: Never use Unicode subscript/superscript characters (₀₁₂₃₄₅₆₇₈₉, ⁰¹²³⁴⁵⁶⁷⁸⁹) in ReportLab PDFs. The built-in fonts do not include these glyphs, causing them to render as solid black boxes.
-
-Instead, use ReportLab's XML markup tags in Paragraph objects:
-```python
-from reportlab.platypus import Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-
-styles = getSampleStyleSheet()
-
-# Subscripts: use <sub> tag
-chemical = Paragraph("H<sub>2</sub>O", styles['Normal'])
-
-# Superscripts: use <super> tag
-squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
-```
-
-For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
-
-
-
-## Premium, High-End PDF Design Playbook
-
-When users ask for "professional", "high-end", "beautiful", "executive", or "presentation-grade" PDFs, use this workflow by default instead of plain text output.
-
-### 1) Visual Direction First (Before Coding)
-
-Pick a clear design direction and keep it consistent across pages:
-
-- **Executive Dark Minimal**: deep navy background, glass-like panels, cyan accent, compact metrics.
-- **Luxury Light Editorial**: spacious white layout, serif heading + sans body, restrained gold/charcoal accents.
-- **Data Instrument Panel**: modular KPI cards, progress bars, technical precision style.
-
-Never ship unstyled default output when the user asks for premium quality.
-
-### 2) Layout System
-
-- Use a **12-column mental grid** and consistent spacing rhythm (`4mm / 8mm / 16mm`).
-- Build hierarchy with: cover/header -> KPI strip -> insights -> appendix/table pages.
-- Keep generous margins (typically `16mm-20mm`) and avoid edge-crowding.
-
-### 3) Typography Rules (ReportLab-safe)
-
-- Prefer contrast: bold display for titles, clean readable body text.
-- Use Paragraph styles for all long text and keep a reusable style map.
-- For formulas, subscripts, superscripts: use `<sub>` / `<super>` tags (never unicode sub/sup glyphs).
-
-### 4) Color + Contrast Rules
-
-- Define a token palette (background/panel/text/accent/border/positive/warn).
-- Ensure strong contrast for body text and values; avoid low-contrast gray on tinted panels.
-- Use accent color sparingly (roughly 10%) for highlights and data bars.
-
-### 5) Reusable Building Blocks
-
-Create helper functions and compose pages from these primitives:
-
-- `add_page_background()` (atmosphere and depth)
-- `rounded_panel()` (cards/sections)
-- `draw_paragraph()` (consistent text wrapping)
-- `draw_metric_card()` (headline KPIs)
-- Optional: `draw_progress_bar()` and `draw_table_row()`
-
-### 6) Production Quality Checklist
-
-- Multi-page structure is intentional (overview + detail), not random page breaks.
-- Includes metadata (`title`, `author`, `subject`) where applicable.
-- Consistent spacing, border radii, and card heights across pages.
-- No clipped text, overflow, or overlapping elements.
-
-### Premium Template Script
-
-Use this script as the default starting point for premium report generation:
+Example:
 
 ```bash
-python pdf/scripts/create_premium_pdf.py -o premium_report.pdf --company "Northstar Dynamics" --month "January 2026"
+python pdf/scripts/create_premium_pdf.py \
+  --company "Northstar Dynamics" \
+  --month "March 2026" \
+  --html report.html \
+  --output report.pdf
 ```
 
-It demonstrates a modern executive aesthetic with KPI cards, atmospheric background layers, and a clean multi-page information hierarchy.
+If Playwright/browser runtime is not available, run with `--html-only` first and install runtime later.
 
-## Command-Line Tools
+## Form tasks
 
-### pdftotext (poppler-utils)
-```bash
-# Extract text
-pdftotext input.pdf output.txt
+For fillable forms and annotation overlays, follow `forms.md` and scripts under `scripts/` (field extraction, coordinate checks, filling).
 
-# Extract text preserving layout
-pdftotext -layout input.pdf output.txt
+## Quality checklist before delivering generated PDFs
 
-# Extract specific pages
-pdftotext -f 1 -l 5 input.pdf output.txt  # Pages 1-5
-```
-
-### qpdf
-```bash
-# Merge PDFs
-qpdf --empty --pages file1.pdf file2.pdf -- merged.pdf
-
-# Split pages
-qpdf input.pdf --pages . 1-5 -- pages1-5.pdf
-qpdf input.pdf --pages . 6-10 -- pages6-10.pdf
-
-# Rotate pages
-qpdf input.pdf output.pdf --rotate=+90:1  # Rotate page 1 by 90 degrees
-
-# Remove password
-qpdf --password=mypassword --decrypt encrypted.pdf decrypted.pdf
-```
-
-### pdftk (if available)
-```bash
-# Merge
-pdftk file1.pdf file2.pdf cat output merged.pdf
-
-# Split
-pdftk input.pdf burst
-
-# Rotate
-pdftk input.pdf rotate 1east output rotated.pdf
-```
-
-## Common Tasks
-
-### Extract Text from Scanned PDFs
-```python
-# Requires: pip install pytesseract pdf2image
-import pytesseract
-from pdf2image import convert_from_path
-
-# Convert PDF to images
-images = convert_from_path('scanned.pdf')
-
-# OCR each page
-text = ""
-for i, image in enumerate(images):
-    text += f"Page {i+1}:\n"
-    text += pytesseract.image_to_string(image)
-    text += "\n\n"
-
-print(text)
-```
-
-### Add Watermark
-```python
-from pypdf import PdfReader, PdfWriter
-
-# Create watermark (or load existing)
-watermark = PdfReader("watermark.pdf").pages[0]
-
-# Apply to all pages
-reader = PdfReader("document.pdf")
-writer = PdfWriter()
-
-for page in reader.pages:
-    page.merge_page(watermark)
-    writer.add_page(page)
-
-with open("watermarked.pdf", "wb") as output:
-    writer.write(output)
-```
-
-### Extract Images
-```bash
-# Using pdfimages (poppler-utils)
-pdfimages -j input.pdf output_prefix
-
-# This extracts all images as output_prefix-000.jpg, output_prefix-001.jpg, etc.
-```
-
-### Password Protection
-```python
-from pypdf import PdfReader, PdfWriter
-
-reader = PdfReader("input.pdf")
-writer = PdfWriter()
-
-for page in reader.pages:
-    writer.add_page(page)
-
-# Add password
-writer.encrypt("userpassword", "ownerpassword")
-
-with open("encrypted.pdf", "wb") as output:
-    writer.write(output)
-```
-
-## Quick Reference
-
-| Task | Best Tool | Command/Code |
-|------|-----------|--------------|
-| Merge PDFs | pypdf | `writer.add_page(page)` |
-| Split PDFs | pypdf | One page per file |
-| Extract text | pdfplumber | `page.extract_text()` |
-| Extract tables | pdfplumber | `page.extract_tables()` |
-| Create PDFs | reportlab | Canvas or Platypus |
-| Command line merge | qpdf | `qpdf --empty --pages ...` |
-| OCR scanned PDFs | pytesseract | Convert to image first |
-| Fill PDF forms | pdf-lib or pypdf (see FORMS.md) | See FORMS.md |
-
-## Next Steps
-
-- For advanced pypdfium2 usage, see REFERENCE.md
-- For JavaScript libraries (pdf-lib), see REFERENCE.md
-- If you need to fill out a PDF form, follow the instructions in FORMS.md
-- For troubleshooting guides, see REFERENCE.md
+- No clipped text at page boundaries.
+- Consistent typography and spacing across pages.
+- Chart/table headers repeat or remain clear across page breaks.
+- Brand colors preserved in print (`print_background=True`).
+- Source HTML and final PDF both saved.
