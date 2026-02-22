@@ -1,18 +1,12 @@
-# PDF 参考（HTML-first）
+# PDF 参考（面向“精美打印稿”的 HTML-first）
 
-## 1. 生成精美 PDF 的默认方案
+## 1) 核心原则
 
-优先采用 **HTML → PDF**：
+- 先做“打印页面设计”，再做 PDF；不是普通网页截图。
+- 先锁定页尺寸、页边距、分页规则，再填内容。
+- 统一设计令牌（颜色、字号、间距）提升成品一致性。
 
-1. 用 HTML/CSS 做页面结构与视觉设计（多页、组件化、响应式排版）。
-2. 通过浏览器内核渲染并检查分页。
-3. 使用 Chromium/Playwright 导出 PDF（保留背景色与高级样式）。
-
-这比直接用 ReportLab 逐坐标绘制更适合复杂视觉设计和快速迭代。
-
----
-
-## 2. 关键 CSS 规范
+## 2) 打印样式最小模板
 
 ```css
 @page {
@@ -20,25 +14,23 @@
   margin: 14mm;
 }
 
-body {
+html, body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
-.card, .table-block {
-  break-inside: avoid;
-}
+.page { break-after: page; }
+.card, .table-block, .chart-block { break-inside: avoid; }
 ```
 
-分页控制：
+## 3) 让 PDF 更“高级”的网页策略
 
-- `page-break-after: always;` / `break-after: page;`
-- `break-inside: avoid;`
-- 对长表格在 HTML 层做分段（每页固定行数）
+- 封面页与正文页使用不同布局节奏（封面可更大胆）。
+- 正文控制每页信息密度：保留留白，避免堆满。
+- 卡片统一圆角/边框/阴影强度，减少杂乱感。
+- 表格采用“标题 + 注释 + 单位”三段式，提升专业感。
 
----
-
-## 3. Playwright 导出 PDF 示例
+## 4) Playwright 导出基线
 
 ```python
 from playwright.async_api import async_playwright
@@ -60,21 +52,17 @@ async def export_pdf(html_path: str, output_pdf: str):
 asyncio.run(export_pdf("report.html", "report.pdf"))
 ```
 
----
+## 5) 与现有脚本配合
 
-## 4. 与现有脚本配合
+`pdf/scripts/create_premium_pdf.py`：
 
-`pdf/scripts/create_premium_pdf.py` 已采用 HTML-first：
+- 可快速生成多页精美 HTML。
+- 默认支持转换到 PDF。
+- `--html-only` 可用于先看版式、再导出。
 
-- 输出精美多页 HTML
-- 可直接转 PDF
-- 可通过 `--html-only` 仅导出 HTML，便于先调样式再生成 PDF
+## 6) 常见失败模式（避免）
 
----
-
-## 5. 仍然建议保留的 PDF 工具
-
-- `pypdf`: 合并、拆分、旋转、元数据、页面级处理
-- `pdfplumber`: 文本和表格抽取
-- `pytesseract` + `pdf2image`: 扫描件 OCR
-- `qpdf/poppler-utils`: 修复、检查、批处理
+- 只做屏幕端样式，未检查打印分页。
+- 长表格直接跨页导致表头丢失。
+- 字号和间距缺乏统一规则，页面“拼贴感”重。
+- PDF 中背景色丢失（忘记 `print_background=True`）。
