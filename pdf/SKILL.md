@@ -186,6 +186,67 @@ squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
 
 For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
 
+
+
+## Premium, High-End PDF Design Playbook
+
+When users ask for "professional", "high-end", "beautiful", "executive", or "presentation-grade" PDFs, use this workflow by default instead of plain text output.
+
+### 1) Visual Direction First (Before Coding)
+
+Pick a clear design direction and keep it consistent across pages:
+
+- **Executive Dark Minimal**: deep navy background, glass-like panels, cyan accent, compact metrics.
+- **Luxury Light Editorial**: spacious white layout, serif heading + sans body, restrained gold/charcoal accents.
+- **Data Instrument Panel**: modular KPI cards, progress bars, technical precision style.
+
+Never ship unstyled default output when the user asks for premium quality.
+
+### 2) Layout System
+
+- Use a **12-column mental grid** and consistent spacing rhythm (`4mm / 8mm / 16mm`).
+- Build hierarchy with: cover/header -> KPI strip -> insights -> appendix/table pages.
+- Keep generous margins (typically `16mm-20mm`) and avoid edge-crowding.
+
+### 3) Typography Rules (ReportLab-safe)
+
+- Prefer contrast: bold display for titles, clean readable body text.
+- Use Paragraph styles for all long text and keep a reusable style map.
+- For formulas, subscripts, superscripts: use `<sub>` / `<super>` tags (never unicode sub/sup glyphs).
+
+### 4) Color + Contrast Rules
+
+- Define a token palette (background/panel/text/accent/border/positive/warn).
+- Ensure strong contrast for body text and values; avoid low-contrast gray on tinted panels.
+- Use accent color sparingly (roughly 10%) for highlights and data bars.
+
+### 5) Reusable Building Blocks
+
+Create helper functions and compose pages from these primitives:
+
+- `add_page_background()` (atmosphere and depth)
+- `rounded_panel()` (cards/sections)
+- `draw_paragraph()` (consistent text wrapping)
+- `draw_metric_card()` (headline KPIs)
+- Optional: `draw_progress_bar()` and `draw_table_row()`
+
+### 6) Production Quality Checklist
+
+- Multi-page structure is intentional (overview + detail), not random page breaks.
+- Includes metadata (`title`, `author`, `subject`) where applicable.
+- Consistent spacing, border radii, and card heights across pages.
+- No clipped text, overflow, or overlapping elements.
+
+### Premium Template Script
+
+Use this script as the default starting point for premium report generation:
+
+```bash
+python pdf/scripts/create_premium_pdf.py -o premium_report.pdf --company "Northstar Dynamics" --month "January 2026"
+```
+
+It demonstrates a modern executive aesthetic with KPI cards, atmospheric background layers, and a clean multi-page information hierarchy.
+
 ## Command-Line Tools
 
 ### pdftotext (poppler-utils)
